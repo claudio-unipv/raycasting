@@ -14,4 +14,4 @@ Raycasting demo with Python and numpy
 
 3) use W A S D to move around and , . to turn left/right.  Q exit the demo.
 
-![screenshot](https://github.com/claudio-unipv/raycasting/data/master/screenshot.png?raw=true)
+![screenshot](https://github.com/claudio-unipv/raycasting/raw/main/data/screenshot.png)
