@@ -1,9 +1,29 @@
 #!/usr/bin/env python3
 
+
 import numpy as np
+import cv2
+import argparse
 
 
-def load_map(filename, z=0.5, a=np.pi / 2):
+def parse_args():
+    parser = argparse.ArgumentParser(description="Raycasting demo with numpy")
+    a = parser.add_argument
+    a("-W", "--width", type=int, default=512, help="Screen width [512]")
+    a("-H", "--height", type=int, default=512, help="Screen height [512]")
+    a("-x", type=float, help="Initial coordinate [take from map file]")
+    a("-y", type=float, help="Initial coordinate [take from map file]")
+    a("-z", "--elevation", type=float, default=0.5, help="POV elevation from ground [0.5]")
+    a("-o", "--orientation", type=float, default=90, help="Initial orientation [90]")
+    a("-f", "--fov", type=float, default=45, help="Field of fiew [45]")
+    a("-t", "--textures", default="data/textures.png", help="Texture images [data/textures.png]")
+    a("-m", "--map", default="data/map.txt", help="Map data [data/map.txt]")
+    a("--floor-color", default="444444", help="Color of the floor [4444444]")
+    a("--ceiling-color", default="AAAAAA", help="Color of the ceiling [AAAAAA]")
+    return parser.parse_args()
+
+
+def load_map(filename):
     """Create a map with different kinds of walls."""
     try:
         with open(filename) as f:
@@ -12,7 +32,7 @@ def load_map(filename, z=0.5, a=np.pi / 2):
         print("Warning: map file not found")
         map_ = np.ones((11, 11), dtype=int)
         map_[1:-1, 1:-1] = 0
-        return map_, 5.0, 5.0, z, a
+        return map_, 5.0, 5.0
     data = data.split()
     # The asterisk is the starting position.
     for y, row in enumerate(data):
@@ -21,7 +41,7 @@ def load_map(filename, z=0.5, a=np.pi / 2):
             break
     data = [row.replace(".", "0").replace("*", "0") for row in data]
     indices = [list(map(int, row)) for row in data]
-    return np.array(indices, dtype=int), x, y, z, a
+    return np.array(indices, dtype=int), x, y
 
 
 def load_textures(filename):
@@ -99,10 +119,10 @@ def raycast(x, y, as_, walls):
     return rs, ws, ts
 
 
-def background_image(height, width, z, floor="666666", ceiling="AAAAAAA"):
+def background_image(height, width, z, floor, ceiling):
     """Create a background image with floor and ceiling."""
-    floor = [int(x, 16) for x in (floor[:2], floor[2:4], floor[4:])]
-    ceiling = [int(x, 16) for x in (ceiling[:2], ceiling[2:4], ceiling[4:])]
+    floor = [int(x, 16) for x in (floor[4:], floor[2:4], floor[:2])]
+    ceiling = [int(x, 16) for x in (ceiling[4:], ceiling[2:4], ceiling[:2])]
     image = np.empty((height, width, 3), dtype=np.uint8)
     image[:, :, :] = np.array(floor).reshape(1, 1, 3)
     h = int((height - 1) * z)
@@ -126,8 +146,8 @@ def render_line(texture, x, top, bottom, height):
     return line
 
 
-def render_image(walls, x, y, z, a, textures, width=512, height=512,
-                 fov=np.pi / 4):
+def render_image(walls, x, y, z, a, textures, width, height,
+                 floor, ceiling, fov):
     """Create an image for the given map, position and textures."""
     f = np.tan(fov / 2)
     as_ = a + np.arctan(np.linspace(-f, f, width))
@@ -141,9 +161,10 @@ def render_image(walls, x, y, z, a, textures, width=512, height=512,
     bottom = np.maximum(-10, bottom)
     top = (top * (height - 1)).astype(int)
     bottom = (bottom * (height - 1)).astype(int)
-    image = background_image(height, width, z)
+    image = background_image(height, width, z, floor, ceiling)
     for i in range(width):
-        line = render_line(textures[ws[i]], ts[i], top[i], bottom[i], height)
+        txt = textures[ws[i] % textures.shape[0]]
+        line = render_line(txt, ts[i], top[i], bottom[i], height)
         b = max(0, bottom[i])
         t = min(top[i], height)
         image[b:t, i, :] = line
@@ -151,33 +172,46 @@ def render_image(walls, x, y, z, a, textures, width=512, height=512,
 
 
 def main():
+    args = parse_args()
     print("""
 Keyboard Commands:
 
     wasd  move arond
       ,.  turn left/right
+      op  move up/down
        q  exit
 """)
-    walls, x, y, z, a = load_map("data/map.txt")
-    textures = load_textures("data/textures.png")
+    walls, x, y = load_map(args.map)
+    z = max(0.0, min(1.0, args.elevation))
+    a = np.deg2rad(args.orientation)
+    fov = np.deg2rad(args.fov)
+    if args.x is not None:
+        x = args.x
+    if args.y is not None:
+        y = args.y
+    textures = load_textures(args.textures)
     dirs = {"w": 0.0, "a": -np.pi / 2, "s": np.pi, "d": np.pi / 2}
     # Main loop: draw the image and wait for a keypress.
     while True:
-        image = render_image(walls, x, y, z, a, textures)
+        image = render_image(walls, x, y, z, a, textures, args.width,
+                             args.height, args.floor_color, args.ceiling_color, fov)
         cv2.imshow("scene", image)
         key = chr(cv2.waitKey(0)).lower()
         if key == "q":
             break
         elif key in dirs:
-            x += 0.1 * np.cos(a + dirs[key])
-            y += 0.1 * np.sin(a + dirs[key])
+            x += 0.2 * np.cos(a + dirs[key])
+            y += 0.2 * np.sin(a + dirs[key])
         elif key == ",":
             a -= np.pi / 20
         elif key == ".":
             a += np.pi / 20
+        elif key == "o":
+            z = min(1.0, z + 0.05)
+        elif key == "p":
+            z = max(0.0, z - 0.05)
     print("bye")
 
 
 if __name__ == "__main__":
-    import cv2
     main()
