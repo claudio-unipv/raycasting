@@ -3,22 +3,17 @@
 import numpy as np
 
 
-def make_map(z=0.5, a=np.pi / 2):
+def load_map(filename, z=0.5, a=np.pi / 2):
     """Create a map with different kinds of walls."""
-    data = """
-    1111111111
-    1........1
-    1...*....1
-    1......111
-    1........1
-    1...22...1
-    1...22...1
-    333......1
-    4.3......1
-    4.3.....11
-    4.....1111
-    4444444444
-    """.split()
+    try:
+        with open(filename) as f:
+            data = f.read()
+    except FileNotFoundError:
+        print("Warning: map file not found")
+        map_ = np.ones((11, 11), dtype=int)
+        map_[1:-1, 1:-1] = 0
+        return map_, 5.0, 5.0, z, a
+    data = data.split()
     # The asterisk is the starting position.
     for y, row in enumerate(data):
         if "*" in row:
@@ -29,17 +24,20 @@ def make_map(z=0.5, a=np.pi / 2):
     return np.array(indices, dtype=int), x, y, z, a
 
 
-def make_textures():
-    """Compute a 4D array representing a set of texture images."""
-    # Create five 256x256 color patterns.
-    a = np.arange(256)[None, :]
-    textures = 0.5 * np.ones((5, a.size, a.size, 3))
-    textures[1, :, :, 1] = (a // 16 + a.T // 16) % 2
-    textures[2, :, :, 2] = ((a + a.T) // 16) % 2
-    textures[3, :, :, 0] = ((a + 0 * a.T) // 16) % 2
-    textures[4, :, :, 0] = ((0 * a + a.T) // 16) % 2
-    textures[4, :, :, 1] = ((0 * a + a.T) // 16) % 2
-    return textures
+def load_textures(filename):
+    """Load the textures from file."""
+    image = cv2.imread(filename)
+    if image is not None:
+        # Assume that each texture is square.
+        size = image.shape[0]
+        image = image.reshape(size, -1, size, 3)
+        image = image.transpose(1, 0, 2, 3)
+    else:
+        # In case of error use ten random colors.
+        print("WARNING: unable to load textures.")
+        colors = np.random.randint(0, 256, (10, 3)).astype(np.uint8)
+        image = np.tile(colors.reshape(10, 1, 1, 3), (1, 256, 256, 1))
+    return image
 
 
 def intersect_lines(x, y, as_, walls):
@@ -101,10 +99,11 @@ def raycast(x, y, as_, walls):
     return rs, ws, ts
 
 
-def background_image(height, width, z, floor=(0.4, 0.4, 0.4),
-                     ceiling=(0.6, 0.6, 0.6)):
+def background_image(height, width, z, floor="666666", ceiling="AAAAAAA"):
     """Create a background image with floor and ceiling."""
-    image = np.empty((height, width, 3))
+    floor = [int(x, 16) for x in (floor[:2], floor[2:4], floor[4:])]
+    ceiling = [int(x, 16) for x in (ceiling[:2], ceiling[2:4], ceiling[4:])]
+    image = np.empty((height, width, 3), dtype=np.uint8)
     image[:, :, :] = np.array(floor).reshape(1, 1, 3)
     h = int((height - 1) * z)
     image[:-h, :, :] = np.array(ceiling).reshape(1, 1, 3)
@@ -114,7 +113,7 @@ def background_image(height, width, z, floor=(0.4, 0.4, 0.4),
 def render_line(texture, x, top, bottom, height):
     """Render a vertical line from a texture."""
     column = int(x * (texture.shape[1] - 1))
-    line = np.empty((top - bottom, 3))
+    line = np.empty((top - bottom, 3), dtype=texture.dtype)
     for c in range(3):
         y = np.linspace(0, 1, top - bottom)
         yp = np.linspace(0, 1, texture.shape[0])
@@ -159,8 +158,8 @@ Keyboard Commands:
       ,.  turn left/right
        q  exit
 """)
-    walls, x, y, z, a = make_map()
-    textures = make_textures()
+    walls, x, y, z, a = load_map("data/map.txt")
+    textures = load_textures("data/textures.png")
     dirs = {"w": 0.0, "a": -np.pi / 2, "s": np.pi, "d": np.pi / 2}
     # Main loop: draw the image and wait for a keypress.
     while True:
