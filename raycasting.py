@@ -13,13 +13,17 @@ def parse_args():
     a("-H", "--height", type=int, default=512, help="Screen height [512]")
     a("-x", type=float, help="Initial coordinate [take from map file]")
     a("-y", type=float, help="Initial coordinate [take from map file]")
-    a("-z", "--elevation", type=float, default=0.5, help="POV elevation from ground [0.5]")
-    a("-o", "--orientation", type=float, default=90, help="Initial orientation [90]")
+    a("-z", "--elevation", type=float, default=0.5,
+      help="POV elevation from ground [0.5]")
+    a("-o", "--orientation", type=float, default=90,
+      help="Initial orientation [90]")
     a("-f", "--fov", type=float, default=45, help="Field of fiew [45]")
-    a("-t", "--textures", default="data/textures.png", help="Texture images [data/textures.png]")
+    a("-t", "--textures", default="data/textures.png",
+      help="Texture images [data/textures.png]")
     a("-m", "--map", default="data/map.txt", help="Map data [data/map.txt]")
     a("--floor-color", default="444444", help="Color of the floor [4444444]")
-    a("--ceiling-color", default="AAAAAA", help="Color of the ceiling [AAAAAA]")
+    a("--ceiling-color", default="AAAAAA",
+      help="Color of the ceiling [AAAAAA]")
     return parser.parse_args()
 
 
@@ -194,7 +198,8 @@ Keyboard Commands:
     # Main loop: draw the image and wait for a keypress.
     while True:
         image = render_image(walls, x, y, z, a, textures, args.width,
-                             args.height, args.floor_color, args.ceiling_color, fov)
+                             args.height, args.floor_color,
+                             args.ceiling_color, fov)
         cv2.imshow("scene", image)
         key = chr(cv2.waitKey(0)).lower()
         if key == "q":
